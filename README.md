@@ -2,6 +2,6 @@
 HSI bar for the Prius 2G with Arduino and CanBus Shield
 
 You'll need an Arduino, CanBus Shield and a 2x16 serial LCD
-The code is for Arduino IDE 0.22.
+The code is for Arduino IDE 1.00
 
 There is a known issue with the RPM overflowing

@@ -1,3 +1,5 @@
+
+
 /* Projecto Barra HSI para o Prius 2G
  Requere o CAN-bus shield para o Arduino.
  Os dados são mostrados no LCD Serial
@@ -6,12 +8,12 @@
  Baseado no Sketch original de SK Pang Electronics www.skpang.co.uk v3.0 21-02-11  
  */
 
-#include <NewSoftSerial.h>
+#include <SoftwareSerial.h>
 #include <mcp2515.h>
 
 
 //definições do lcd série (lcd's serial da SparkFun v2.5)
-NewSoftSerial sLCD =  NewSoftSerial(3, 6); /* O LCD série está ligado no pino 14, entrada analógica A0 */
+SoftwareSerial sLCD(3, 6); // RX, TX
 #define COMMAND 0xFE //caracter especial para enviar comandos para o LCD serial
 #define CLEAR   0x01 //caracter para limpar o écran do LCD
 #define LINE0   0x80 //caracter para escolher a posição do cursor no início da primeira linha
@@ -231,12 +233,12 @@ void setup() {
 
   sLCD.begin(9600);              //inicia a comunicação com o LCD
 
-  sLCD.print(0x12,BYTE);        //faz reset para 9600bps
+  sLCD.write(0x12);        //faz reset para 9600bps
 
   delay (2000);
 
-  sLCD.print(DIM,BYTE);        //escolhe a velocidade 19200bps
-  sLCD.print(0x0F,BYTE);
+  sLCD.write(DIM);        //escolhe a velocidade 19200bps
+  sLCD.write(0x0F);
 
 
   sLCD.begin(19200);              //inicia a comunicação a 19200
@@ -246,20 +248,20 @@ void setup() {
   clear_lcd();
 
   //Ajuste inicial da Luminosidade do LCD para 100%
-  sLCD.print(DIM,BYTE);
-  sLCD.print(0x9D,BYTE);
+  sLCD.write(DIM);
+  sLCD.write(0x9D);
   delay(100);
 
   //mensagem de boas vindas
   clear_lcd();
 
-  sLCD.print(COMMAND,BYTE);                   
-  sLCD.print(LINE1,BYTE);
+  sLCD.write(COMMAND);                   
+  sLCD.write(LINE1);
   sLCD.print("   HSI Ver.03   ");
   //         |                |
 
-  sLCD.print(COMMAND,BYTE);                   
-  sLCD.print(LINE0,BYTE);
+  sLCD.write(COMMAND);                   
+  sLCD.write(LINE0);
   sLCD.print("   BEM-VIND@    ");
   //         |                |
 
@@ -269,21 +271,21 @@ void setup() {
 
   if(inic(CAN_500))  // Inicializa o controlador CAN MCP2515 à velocidade escolhida, 500 para o Prius
   {
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0);
     sLCD.print(" * * Pronto * * ");
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE1,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE1);
     sLCD.print("Ligue a viatura!");
     //         |                |
   } 
   else
   {
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0);
     sLCD.print("    ERRO NA     ");
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE1,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE1);
     sLCD.print(" INICIALIZACAO  ");
     delay (10000);
     //         |                |
@@ -307,24 +309,25 @@ void setup() {
   //desenha a barra inicial vazia
 
 
-  sLCD.print(COMMAND,BYTE);                   
-  sLCD.print(LINE0,BYTE);
-  sLCD.print(0,BYTE);
-  sLCD.print(1,BYTE);
-  sLCD.print(1,BYTE);
-  sLCD.print(5,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(4,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(3,BYTE);
-  sLCD.print(4,BYTE);
-  sLCD.print(6,BYTE);
-  sLCD.print(7,BYTE);
+  sLCD.write(COMMAND);                   
+  sLCD.write(LINE0);
+  
+  sLCD.write((byte)0x0);
+  sLCD.write(1);
+  sLCD.write(1);
+  sLCD.write(5);
+  sLCD.write(3);
+  sLCD.write(3);
+  sLCD.write(3);
+  sLCD.write(3);
+  sLCD.write(4);
+  sLCD.write(3);
+  sLCD.write(3);
+  sLCD.write(3);
+  sLCD.write(3);
+  sLCD.write(4);
+  sLCD.write(6);
+  sLCD.write(7);
 
 
 }
@@ -346,8 +349,8 @@ void loop()
 
   {
     temp_agua2 = dados[1];
-    sLCD.print(COMMAND,BYTE);
-    sLCD.print(LINE1 + 6,BYTE);                     // Move o cursor do LCD 
+    sLCD.write(COMMAND);
+    sLCD.write(LINE1 + 6);                     // Move o cursor do LCD 
     sprintf(buffer,"%3dC",(int) temp_agua2);
     sLCD.print(buffer);
   }
@@ -362,8 +365,8 @@ void loop()
       if (lum2 == 24)
       {
         //Ajusta a Luminosidade do LCD  min = 80
-        sLCD.print(DIM,BYTE);
-        sLCD.print(0x84,BYTE);
+        sLCD.write(DIM);
+        sLCD.write(0x84);
         delay (200);
       }
 
@@ -371,8 +374,8 @@ void loop()
 
       {
         //Ajusta a Luminosidade do LCD max = 9D
-        sLCD.print(DIM,BYTE);
-        sLCD.print(0x9D,BYTE);
+        sLCD.write(DIM);
+        sLCD.write(0x9D);
         delay(200);
       }
       lum_old = lum2;  //actualiza o valor actual
@@ -400,15 +403,15 @@ void loop()
       if (flag == 0)  //se ainda estiver ligado avisa e desliga
       {
         clear_lcd();
-        sLCD.print(COMMAND,BYTE);                   
-        sLCD.print(LINE0,BYTE);
+        sLCD.write(COMMAND);                   
+        sLCD.write(LINE0);
         sLCD.print("Falta de sinais ");
-        sLCD.print(COMMAND,BYTE);                   
-        sLCD.print(LINE1,BYTE);
+        sLCD.write(COMMAND);                   
+        sLCD.write(LINE1);
         sLCD.print(" Hibernando...  ");
         //         |                |
-        sLCD.print(DIM,BYTE);
-        sLCD.print(0x80,BYTE);  //desliga a iluminação
+        sLCD.write(DIM);
+        sLCD.write(0x80);  //desliga a iluminação
         delay (5000);
         clear_lcd();
         flag = 1;    //actualiza a flag de hibernação
@@ -429,8 +432,8 @@ void loop()
   if (dados[3] != 9999)          // Ler as RPM 
   {
     rpmrequisitadas2 = dados[3];   
-    sLCD.print(COMMAND,BYTE);                   // Move o cursor LCD 
-    sLCD.print(LINE1+11,BYTE);
+    sLCD.write(COMMAND);                   // Move o cursor LCD 
+    sLCD.write(LINE1+11);
     if (modev2 == 64) sLCD.print("   EV");    //se estiver em modo EV escreve EV
     else {
       sprintf(buffer,"%4d",(int) rpmrequisitadas2);
@@ -446,8 +449,8 @@ void loop()
   if(dados[4] != 9999) //ler a bateria
   {
     cbat2 = dados[4];
-    sLCD.print(COMMAND,BYTE);
-    sLCD.print(LINE1,BYTE);                     // Move o cursor do LCD 
+    sLCD.write(COMMAND);
+    sLCD.write(LINE1);                     // Move o cursor do LCD 
     sprintf(buffer,"%+4dA",(int) cbat2);  
     sLCD.print(buffer);
   }
@@ -706,8 +709,8 @@ void loop()
 //função para limpar o ecran
 void clear_lcd(void)
 {
-  sLCD.print(COMMAND,BYTE);
-  sLCD.print(CLEAR,BYTE);
+  sLCD.write(COMMAND);
+  sLCD.write(CLEAR);
 }  
 
 
@@ -720,9 +723,9 @@ void prog_car(int x, byte *desenho)
   for(i = 0; i < 8; i++)
 
   {
-    sLCD.print(COMMAND, BYTE); // Send command 
-    sLCD.print(0x40 | (x << 3) | i, BYTE); // Set the CGRAM address 
-    sLCD.print(desenho[i], BYTE); // Set the character 
+    sLCD.write(COMMAND); // Send command 
+    sLCD.write(0x40 | (x << 3) | i); // Set the CGRAM address 
+    sLCD.write(desenho[i]); // Set the character 
   } 
 
 
@@ -756,11 +759,11 @@ void barra_R (int r)
 
     //imprime os 3 caracteres
 
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0);
     for (count=0; count<=2; count++)  
     {
-      sLCD.print(devolve[count],BYTE);
+      sLCD.write(devolve[count]);
     }
 
   }
@@ -793,9 +796,9 @@ void barra_R (int r)
         break;
       }
       devolve[2] = 2;
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0 + 2,BYTE);
-      sLCD.print(devolve[2],BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0 + 2);
+      sLCD.write(devolve[2]);
     }
 
     if (RA>=1 && RA<=6)
@@ -936,9 +939,9 @@ void barra_R (int r)
         break;
       }
       devolve[2] = 2;
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0 + 2,BYTE);
-      sLCD.print(devolve[2],BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0 + 2);
+      sLCD.write(devolve[2]);
     }
 
     if (RA>=1 && RA<=6)
@@ -1069,9 +1072,9 @@ void barra_R (int r)
         break;
       }
       devolve[2] = 2;
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0 + 2,BYTE);
-      sLCD.print(devolve[2],BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0 + 2);
+      sLCD.write(devolve[2]);
     }
 
     if (RA>=1 && RA<=6)
@@ -1200,21 +1203,21 @@ void barra_E (int e)
       esc[10]=4;
 
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
 
-      sLCD.print(esc[0],BYTE);
-      if (EA>=5)  sLCD.print(esc[1],BYTE);
-      if (EA>=11) sLCD.print(esc[2],BYTE);
-      if (EA>=17) sLCD.print(esc[3],BYTE);
-      if (EA>=23) sLCD.print(esc[4],BYTE);
-      if (EA>=29) sLCD.print(esc[5],BYTE);
-      if (EA>=35) sLCD.print(esc[6],BYTE);
-      if (EA>=41) sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[0]);
+      if (EA>=5)  sLCD.write(esc[1]);
+      if (EA>=11) sLCD.write(esc[2]);
+      if (EA>=17) sLCD.write(esc[3]);
+      if (EA>=23) sLCD.write(esc[4]);
+      if (EA>=29) sLCD.write(esc[5]);
+      if (EA>=35) sLCD.write(esc[6]);
+      if (EA>=41) sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
 
 
@@ -1271,20 +1274,20 @@ void barra_E (int e)
 
 
 
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0+3,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0+3);
 
-    sLCD.print(esc[0],BYTE);
-    if (EA>=5)  sLCD.print(esc[1],BYTE);
-    if (EA>=11) sLCD.print(esc[2],BYTE);
-    if (EA>=17) sLCD.print(esc[3],BYTE);
-    if (EA>=23) sLCD.print(esc[4],BYTE);
-    if (EA>=29) sLCD.print(esc[5],BYTE);
-    if (EA>=35) sLCD.print(esc[6],BYTE);
-    if (EA>=41) sLCD.print(esc[7],BYTE);
-    if (EA>=47) sLCD.print(esc[8],BYTE);
-    if (EA>=53) sLCD.print(esc[9],BYTE);
-    if (EA>=59) sLCD.print(esc[10],BYTE);
+    sLCD.write(esc[0]);
+    if (EA>=5)  sLCD.write(esc[1]);
+    if (EA>=11) sLCD.write(esc[2]);
+    if (EA>=17) sLCD.write(esc[3]);
+    if (EA>=23) sLCD.write(esc[4]);
+    if (EA>=29) sLCD.write(esc[5]);
+    if (EA>=35) sLCD.write(esc[6]);
+    if (EA>=41) sLCD.write(esc[7]);
+    if (EA>=47) sLCD.write(esc[8]);
+    if (EA>=53) sLCD.write(esc[9]);
+    if (EA>=59) sLCD.write(esc[10]);
 
     switch (e)
     {
@@ -1333,19 +1336,19 @@ void barra_E (int e)
     if (EA>=11)
 
     {
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+4,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+4);
 
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      if (EA>=17) sLCD.print(esc[3],BYTE);
-      if (EA>=23) sLCD.print(esc[4],BYTE);
-      if (EA>=29) sLCD.print(esc[5],BYTE);
-      if (EA>=35) sLCD.print(esc[6],BYTE);
-      if (EA>=41) sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      if (EA>=17) sLCD.write(esc[3]);
+      if (EA>=23) sLCD.write(esc[4]);
+      if (EA>=29) sLCD.write(esc[5]);
+      if (EA>=35) sLCD.write(esc[6]);
+      if (EA>=41) sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
 
 
@@ -1355,11 +1358,11 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
 
     }
 
@@ -1416,31 +1419,31 @@ void barra_E (int e)
     {
 
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+5,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+5);
 
 
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
-      if (EA>=23) sLCD.print(esc[4],BYTE);
-      if (EA>=29) sLCD.print(esc[5],BYTE);
-      if (EA>=35) sLCD.print(esc[6],BYTE);
-      if (EA>=41) sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
+      if (EA>=23) sLCD.write(esc[4]);
+      if (EA>=29) sLCD.write(esc[5]);
+      if (EA>=35) sLCD.write(esc[6]);
+      if (EA>=41) sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
     }
 
     else
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
 
     }
 
@@ -1501,18 +1504,18 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+6,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+6);
 
 
-      sLCD.print(esc[3],BYTE);
-      sLCD.print(esc[4],BYTE);
-      if (EA>=29) sLCD.print(esc[5],BYTE);
-      if (EA>=35) sLCD.print(esc[6],BYTE);
-      if (EA>=41) sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[3]);
+      sLCD.write(esc[4]);
+      if (EA>=29) sLCD.write(esc[5]);
+      if (EA>=35) sLCD.write(esc[6]);
+      if (EA>=41) sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
     }
 
@@ -1520,13 +1523,13 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
 
     }
     switch (e)
@@ -1578,17 +1581,17 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+7,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+7);
 
 
-      sLCD.print(esc[4],BYTE);
-      sLCD.print(esc[5],BYTE);
-      if (EA>=35) sLCD.print(esc[6],BYTE);
-      if (EA>=41) sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[4]);
+      sLCD.write(esc[5]);
+      if (EA>=35) sLCD.write(esc[6]);
+      if (EA>=41) sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
     }
 
@@ -1596,14 +1599,14 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
-      sLCD.print(esc[4],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
+      sLCD.write(esc[4]);
 
     }
 
@@ -1657,16 +1660,16 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+8,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+8);
 
 
-      sLCD.print(esc[5],BYTE);
-      sLCD.print(esc[6],BYTE);
-      if (EA>=41) sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[5]);
+      sLCD.write(esc[6]);
+      if (EA>=41) sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
     }
 
@@ -1674,15 +1677,15 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
-      sLCD.print(esc[4],BYTE);
-      sLCD.print(esc[5],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
+      sLCD.write(esc[4]);
+      sLCD.write(esc[5]);
 
     }
 
@@ -1740,14 +1743,14 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+9,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+9);
 
-      sLCD.print(esc[6],BYTE);
-      sLCD.print(esc[7],BYTE);
-      if (EA>=47) sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[6]);
+      sLCD.write(esc[7]);
+      if (EA>=47) sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
     }
 
@@ -1755,16 +1758,16 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
-      sLCD.print(esc[4],BYTE);
-      sLCD.print(esc[5],BYTE);
-      sLCD.print(esc[6],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
+      sLCD.write(esc[4]);
+      sLCD.write(esc[5]);
+      sLCD.write(esc[6]);
 
     }
 
@@ -1821,14 +1824,14 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+10,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+10);
 
 
-      sLCD.print(esc[7],BYTE);
-      sLCD.print(esc[8],BYTE);
-      if (EA>=53) sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[7]);
+      sLCD.write(esc[8]);
+      if (EA>=53) sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
     }
 
@@ -1836,17 +1839,17 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
-      sLCD.print(esc[4],BYTE);
-      sLCD.print(esc[5],BYTE);
-      sLCD.print(esc[6],BYTE);
-      sLCD.print(esc[7],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
+      sLCD.write(esc[4]);
+      sLCD.write(esc[5]);
+      sLCD.write(esc[6]);
+      sLCD.write(esc[7]);
 
     }
 
@@ -1900,13 +1903,13 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+11,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+11);
 
 
-      sLCD.print(esc[8],BYTE);
-      sLCD.print(esc[9],BYTE);
-      if (EA>=59) sLCD.print(esc[10],BYTE);
+      sLCD.write(esc[8]);
+      sLCD.write(esc[9]);
+      if (EA>=59) sLCD.write(esc[10]);
 
     }
 
@@ -1914,18 +1917,18 @@ void barra_E (int e)
 
     {
 
-      sLCD.print(COMMAND,BYTE);                   
-      sLCD.print(LINE0+3,BYTE);
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0+3);
 
-      sLCD.print(esc[0],BYTE);
-      sLCD.print(esc[1],BYTE);
-      sLCD.print(esc[2],BYTE);
-      sLCD.print(esc[3],BYTE);
-      sLCD.print(esc[4],BYTE);
-      sLCD.print(esc[5],BYTE);
-      sLCD.print(esc[6],BYTE);
-      sLCD.print(esc[7],BYTE);
-      sLCD.print(esc[8],BYTE);
+      sLCD.write(esc[0]);
+      sLCD.write(esc[1]);
+      sLCD.write(esc[2]);
+      sLCD.write(esc[3]);
+      sLCD.write(esc[4]);
+      sLCD.write(esc[5]);
+      sLCD.write(esc[6]);
+      sLCD.write(esc[7]);
+      sLCD.write(esc[8]);
 
     }
 
@@ -1977,20 +1980,20 @@ void barra_E (int e)
 
 
 
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0+3,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0+3);
 
-    sLCD.print(esc[0],BYTE);
-    sLCD.print(esc[1],BYTE);
-    sLCD.print(esc[2],BYTE);
-    sLCD.print(esc[3],BYTE);
-    sLCD.print(esc[4],BYTE);
-    sLCD.print(esc[5],BYTE);
-    sLCD.print(esc[6],BYTE);
-    sLCD.print(esc[7],BYTE);
-    sLCD.print(esc[8],BYTE);
-    sLCD.print(esc[9],BYTE);
-    if (EA>=59) sLCD.print(esc[10],BYTE);
+    sLCD.write(esc[0]);
+    sLCD.write(esc[1]);
+    sLCD.write(esc[2]);
+    sLCD.write(esc[3]);
+    sLCD.write(esc[4]);
+    sLCD.write(esc[5]);
+    sLCD.write(esc[6]);
+    sLCD.write(esc[7]);
+    sLCD.write(esc[8]);
+    sLCD.write(esc[9]);
+    if (EA>=59) sLCD.write(esc[10]);
 
     switch (e)
     {
@@ -2059,20 +2062,20 @@ void barra_E (int e)
 
 
 
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0+3,BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0+3);
 
-    sLCD.print(esc[0],BYTE);
-    sLCD.print(esc[1],BYTE);
-    sLCD.print(esc[2],BYTE);
-    sLCD.print(esc[3],BYTE);
-    sLCD.print(esc[4],BYTE);
-    sLCD.print(esc[5],BYTE);
-    sLCD.print(esc[6],BYTE);
-    sLCD.print(esc[7],BYTE);
-    sLCD.print(esc[8],BYTE);
-    sLCD.print(esc[9],BYTE);
-    sLCD.print(esc[10],BYTE);
+    sLCD.write(esc[0]);
+    sLCD.write(esc[1]);
+    sLCD.write(esc[2]);
+    sLCD.write(esc[3]);
+    sLCD.write(esc[4]);
+    sLCD.write(esc[5]);
+    sLCD.write(esc[6]);
+    sLCD.write(esc[7]);
+    sLCD.write(esc[8]);
+    sLCD.write(esc[9]);
+    sLCD.write(esc[10]);
 
 
 
@@ -2105,10 +2108,10 @@ void barra_P (int p)
     devolve[1] = 7;
 
 
-    sLCD.print(COMMAND,BYTE);                   
-    sLCD.print(LINE0+14,BYTE);
-    sLCD.print(devolve[0],BYTE);
-    sLCD.print(devolve[1],BYTE);
+    sLCD.write(COMMAND);                   
+    sLCD.write(LINE0+14);
+    sLCD.write(devolve[0]);
+    sLCD.write(devolve[1]);
 
 
   }
