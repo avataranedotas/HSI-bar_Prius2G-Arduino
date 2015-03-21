@@ -3,11 +3,15 @@
 /* Projecto Barra HSI para o Prius 2G
  Requere o CAN-bus shield para o Arduino.
  Os dados são mostrados no LCD Serial
-  
+ 
  Baseado no Sketch original de SK Pang Electronics www.skpang.co.uk v3.0 21-02-11  
  */
 
 #include <SoftwareSerial.h>
+
+#include <avr/sleep.h>
+#include <avr/wdt.h>
+
 #include <mcp2515.h>
 
 
@@ -39,9 +43,12 @@ SoftwareSerial sLCD(3, 6); // RX, TX
 #define LED3 7
 #define FALTA 10
 
+
+#define pontoC 65  //ponto de inicio da zona PWR da barra
+
 char buffer[32];  //Buffer de dados temporários para escrever no LCD
 char esc[11];     //Para escrever a barra E
-int dados[10];     //para receber dados das funções
+int dados[20];     //para receber dados das funções
 
 int acel;  //posição do acelerador 0-100%
 
@@ -51,11 +58,42 @@ int rpmrequisitadas2; //rpm 0-4500 rpm
 int cbat2; //corrente da bateria   -125 a 125A
 int temp_agua2; //temperatura da água de refrigeração 0 - 200 C
 int velo2; // velocidade em kmh 0 a 176
+long velo3; // raw
 int mud2; //mudança 
 int soc2; //carga da bateria 0-100%
 int modev2; //modo EV
 int lum2; //luminosidade painel
 int lum_old = 10;
+
+int injector2;
+int deposito2=100;
+int tabeladeposito[10]= {
+  0,0,0,0,0,0,0,0,0,0};
+int contamedia=0;
+int mediadeposito=0;
+unsigned long distancia3=0;
+
+unsigned long distanciaaux;
+
+float consumoinst=0.0;
+unsigned int consumo1,consumo2;
+float consumomedio=0.0;
+unsigned int consumom1,consumom2;
+unsigned long distancia=0;
+unsigned long combustivel=0;
+float consumomedio2=0.0;
+unsigned int consumo2m1,consumo2m2;
+unsigned long distancia2=0;
+unsigned long combustivel2=0;
+long autonomia=1000;
+
+unsigned long distanciaev=0;
+unsigned long distanciamci=0;
+unsigned long percentagemev;
+
+
+int ecran=1;
+
 
 //variáveis para a barra
 int R=0;
@@ -66,25 +104,15 @@ int P=0;
 //pontos variáveis iniciais da barra
 int pontoA = 20;
 int pontoB = 35;
-int pontoC = 65;
 
 
 boolean flagE4 = false;
 boolean flagE5 = false;
 boolean flagE6 = false;
 
+boolean message_ok[20];
 
-boolean message_ok0 = false;
-boolean message_ok1 = false;
-boolean message_ok2 = false;
-boolean message_ok3 = false;
-boolean message_ok4 = false;
-boolean message_ok5 = false;
-boolean message_ok6 = false;
-boolean message_ok7 = false;
-boolean message_ok8 = false;
-boolean message_ok9 = false;
-
+boolean troca_tmp_soc = false;
 
 //variáveis para a barra anteriores à actual 
 int RA=0;
@@ -96,7 +124,6 @@ int PA=0;
 //variáveis para fazer contas ao ler da ECU
 int valor;
 long valor2;
-float flut;
 int timeout = 0;
 tCAN message;
 
@@ -198,13 +225,26 @@ byte P9[8] = {
 //temporizadores
 
 unsigned long time1=0;
-//unsigned long time2=0;
-//unsigned long time3=0;
-//unsigned long time4=0;
+unsigned long time2=0;
+unsigned long time3=0;
+unsigned long time4=0;
 
 int count=0;       //Variável geral
 int count2=0;       //Variável geral
 int flag=0;
+
+
+long timeSleep = 0;  // total time due to sleep
+float calibv = 0.93; // ratio of real clock with WDT clock
+volatile byte isrcalled = 0;  // WDT vector flag
+
+
+
+// auxiliares para o botão
+unsigned long contabotao;
+boolean premido=false;
+
+
 
 
 void setup() {
@@ -225,6 +265,10 @@ void setup() {
   digitalWrite(LEFT, HIGH);
   digitalWrite(RIGHT, HIGH);
   digitalWrite(CLICK, HIGH);
+
+  time2=millis();
+  time3=millis();
+  time4=millis();
 
 
   //início
@@ -256,7 +300,7 @@ void setup() {
 
   sLCD.write(COMMAND);                   
   sLCD.write(LINE1);
-  sLCD.print("   HSI Ver.03   ");
+  sLCD.print("   HSI Ver.05   ");
   //         |                |
 
   sLCD.write(COMMAND);                   
@@ -277,6 +321,8 @@ void setup() {
     sLCD.write(LINE1);
     sLCD.print("Ligue a viatura!");
     //         |                |
+
+
   } 
   else
   {
@@ -310,7 +356,6 @@ void setup() {
 
   sLCD.write(COMMAND);                   
   sLCD.write(LINE0);
-  
   sLCD.write((byte)0x0);
   sLCD.write(1);
   sLCD.write(1);
@@ -341,6 +386,122 @@ void loop()
   //ler os dados do BUS CAN
   ecu_3(dados);
 
+
+
+  //carregar no botao
+  if (digitalRead(DOWN) == LOW)
+  {
+    //se é primeira vez que se carrega faz reset ao contador de tempo
+    if (premido == false) contabotao = millis();
+    premido = true;
+
+    //se já se está a carregar à muito tempo detectar botão longo     
+    if ( (millis()-contabotao)>2000)
+    {
+      if (ecran == 3)
+      {
+        sLCD.write(COMMAND);
+        sLCD.write(LINE1);                      
+        sLCD.print("  RESET TRIP2   ");  
+        distancia2 = 0;
+        combustivel2 =0;
+      }
+
+      if (ecran == 2)
+      {
+        sLCD.write(COMMAND);
+        sLCD.write(LINE1);                      
+        sLCD.print("  RESET TRIP1   ");  
+        distancia = 0;
+        combustivel =0;
+      }
+      if (ecran == 1)
+      {
+        sLCD.write(COMMAND);
+        sLCD.write(LINE1);                      
+        sLCD.print("ALEXMOL@CLIX.PT ");  
+      }
+      if (ecran == 4)
+      {
+        sLCD.write(COMMAND);
+        sLCD.write(LINE1);                      
+        sLCD.print("    RESET  %EV  ");  
+        distanciaev=0;
+        distanciamci=0;
+      }
+
+
+      //esperar que o utilizador tire o dedo
+      while (digitalRead(DOWN) == LOW) {
+      };
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("                ");  
+      premido = false;
+    }
+  }
+
+
+  //largar botao depois de premido -> pressao curta   
+  if ((digitalRead(DOWN) ==HIGH) && (premido == true))
+  {
+    premido = false;
+    ecran=ecran + 1;
+    if (ecran >= 5) ecran =1 ;
+
+    if (ecran ==1)
+    {
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("CBAT TMP/SOC RPM");  
+      delay (500); 
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("                ");  
+    }
+
+    if (ecran ==2)
+    {
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("INST TRIP1 MEDIA");  
+      delay (500); 
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("                ");  
+    }
+
+    if (ecran ==3)
+    {
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("INST TRIP2 MEDIA");  
+      delay (500); 
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("                ");  
+    }
+
+
+    if (ecran ==4)
+    {
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("AUTON DEPO   %EV");  
+      delay (500); 
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                      
+      sLCD.print("                ");  
+    }
+
+
+
+
+  }
+
+
+
+
   //modo EV
   if (dados[0] !=9999) modev2=dados[0]; 
 
@@ -348,10 +509,21 @@ void loop()
 
   {
     temp_agua2 = dados[1];
-    sLCD.write(COMMAND);
-    sLCD.write(LINE1 + 6);                     // Move o cursor do LCD 
-    sprintf(buffer,"%3dC",(int) temp_agua2);
-    sLCD.print(buffer);
+
+    //sLCD.write(COMMAND);
+    //sLCD.write(LINE1 + 6);                     // Move o cursor do LCD 
+    //sprintf(buffer,"%3dC",(int) temp_agua2);
+    //sLCD.print(buffer);
+  }
+
+
+
+  if ( dados[17] !=9999)  //deposito
+
+  {
+    deposito2 = ((dados[17])-2) * 100 / 42;
+    //    deposito2 = dados[17] * 100 / 44;
+    mediadeposito = deposito2;
   }
 
 
@@ -384,45 +556,46 @@ void loop()
     }
   }
 
-  
 
-  if ( millis() - time1 >= 10000)   //verificar se não está desligado de 10 em 10 segundos
-  { 
-    count2 = 0;
-    for (count=0;count<=(FALTA-1);count++)
-    {
-      if (dados[count]==9999) count2=count2+1;
-    }
 
-    if (count2==FALTA)    //se estiver desligado desligar a iluminação do LCD
-    {
-      lum_old = 10;  // **************************************************************
-      lum2=10;
-
-      if (flag == 0)  //se ainda estiver ligado avisa e desliga
-      {
-        clear_lcd();
-        sLCD.write(COMMAND);                   
-        sLCD.write(LINE0);
-        sLCD.print("Falta de sinais ");
-        sLCD.write(COMMAND);                   
-        sLCD.write(LINE1);
-        sLCD.print(" Hibernando...  ");
-        //         |                |
-        sLCD.write(DIM);
-        sLCD.write(0x80);  //desliga a iluminação
-        delay (5000);
-        clear_lcd();
-        flag = 1;    //actualiza a flag de hibernação
-      }
-    }
-    else
-    {
-      flag=0;
-    }
-
-    time1=millis();
+  count2 = 0;
+  for (count=0;count<=(FALTA-1);count++)
+  {
+    if (dados[count]==9999) count2=count2+1;
   }
+
+  if (count2==FALTA)    //se estiver desligado desligar a iluminação do LCD
+  {
+    lum_old = 10;  // **************************************************************
+    lum2=10;
+
+    if (flag == 0)  //se ainda estiver ligado avisa e desliga
+    {
+      clear_lcd();
+
+      //TO DO guarda valores na EEPROM
+
+      //avisa no LCD que vai hibernar
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE0);
+      sLCD.print("Falta de sinais ");
+      sLCD.write(COMMAND);                   
+      sLCD.write(LINE1);
+      sLCD.print(" Hibernando...  ");
+      //         |                |
+      sLCD.write(DIM);
+      sLCD.write(0x80);  //desliga a iluminação
+      delay (5000);
+      clear_lcd();
+      flag = 1;    //actualiza a flag de hibernação
+    }
+    sleepCPU_delay(9000);
+  }
+  else
+  {
+    flag=0;
+  }
+
 
 
 
@@ -431,27 +604,35 @@ void loop()
   if (dados[3] != 9999)          // Ler as RPM 
   {
     rpmrequisitadas2 = dados[3];   
-    sLCD.write(COMMAND);                   // Move o cursor LCD 
-    sLCD.write(LINE1+11);
-    if (modev2 == 64) sLCD.print("   EV");    //se estiver em modo EV escreve EV
-    else {
-      sprintf(buffer,"%4d",(int) rpmrequisitadas2);
-      sLCD.print(buffer);
-      if (rpmrequisitadas2 < 970) sLCD.print("E");  //se o MCI não estiver a trabalhar mostra E em vez de R
-      else sLCD.print("R");
+    if (ecran ==1)
+
+    {
+
+      sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+11);
+      if (modev2 == 64) sLCD.print("   EV");    //se estiver em modo EV escreve EV
+      else {
+        sprintf(buffer,"%4d",(int) rpmrequisitadas2);
+        sLCD.print(buffer);
+        if (rpmrequisitadas2 < 970) sLCD.print("E");  //se o MCI não estiver a trabalhar mostra E em vez de R
+        else sLCD.print("R");
+      }
     }
   }
-
   //corrente da bateria
 
 
   if(dados[4] != 9999) //ler a bateria
-  {
+  {    
     cbat2 = dados[4];
-    sLCD.write(COMMAND);
-    sLCD.write(LINE1);                     // Move o cursor do LCD 
-    sprintf(buffer,"%+4dA",(int) cbat2);  
-    sLCD.print(buffer);
+    if (ecran==1)
+    {
+
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1);                     // Move o cursor do LCD 
+      sprintf(buffer,"%+4dA",(int) cbat2);  
+      sLCD.print(buffer);
+    }
   }
 
 
@@ -472,6 +653,7 @@ void loop()
   if( dados[7] != 9999)
   {
     velo2 = dados[7];
+    velo3 = dados[16];
     if (mud2 == 33) velo2 = velo2 * -1;   //se estiver metida a marcha atrás a velocidade passa a negativa
   }
 
@@ -486,6 +668,236 @@ void loop()
 
   if (dados[9] !=9999) soc2 = dados[9];
 
+
+
+
+  if ( (estMillis() - time4 >= 2000) && flag==0)   //intervalo de actualização
+  { 
+
+    //Ecran 1
+    if ( ecran==1 )
+
+    {
+
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1 + 6);                     // Move o cursor do LCD 
+      if (troca_tmp_soc) 
+      {
+        sprintf(buffer,"%3dC",(int) temp_agua2);
+      }
+      else 
+        sprintf(buffer,"%3d%%",(int) soc2);
+      sLCD.print(buffer);
+
+      troca_tmp_soc=~troca_tmp_soc; 
+      time4 = estMillis(); 
+    }
+  }
+
+
+  //injector
+
+  if (dados[15] !=9999) 
+  {
+    injector2 = dados[15];
+  }
+
+  //cálculo consumo instantâneo
+
+  // rpm*injector = combustível por tempo 
+  // ------------   --------------------- = combustível / distância   em litros / 100km
+  // velocidade   = distância por tempo  
+
+  //                  1/min= 1/60s                1/8 ms              km/h               
+
+  consumoinst = (((float(rpmrequisitadas2) * float(injector2))/ float(velo2)) / 3495.0);
+
+  if ((abs(velo2)==0)     ) consumoinst=3.4E+38;
+  if (rpmrequisitadas2<800) consumoinst=0;
+
+  consumo1 = int(constrain(consumoinst,0,99.9));    
+  consumo2 = int( (constrain(consumoinst,0,99.9) - consumo1) * 10); 
+
+
+if (ecran==2 || ecran==3)
+  {
+
+    //imprime consumo instantâneo
+    sLCD.write(COMMAND);
+    sLCD.write(LINE1 + 0);                     // Move o cursor do LCD 
+    sprintf(buffer,"%2d.%d",consumo1,consumo2);  
+    sLCD.print(buffer);
+  }
+
+
+
+
+
+  if ( estMillis() - time1 >= 250)   //intervalo de actualização
+  { 
+
+
+    //cálculo distância percorrida
+
+    //distância medida em cm
+
+    if (velo2 != 0)
+    {
+      distanciaaux = (   abs(velo3)*(millis()-time2) * 10 / 1000 /36   );
+      distancia  = distancia  + distanciaaux;
+      distancia2 = distancia2 + distanciaaux;  
+      if (rpmrequisitadas2 <900) distanciaev = distanciaev + distanciaaux;
+      else distanciamci = distanciamci + distanciaaux;
+    }
+    time2 = millis();
+
+
+    //cálculo do combustível gasto em microlitros
+
+      combustivel = combustivel + long(rpmrequisitadas2)*long(injector2) * (millis()-time3) / 3495 / 360;
+    combustivel2 = combustivel2 + long(rpmrequisitadas2)*long(injector2) * (millis()-time3) / 3495 / 360;
+
+    time3 = millis();
+
+    // cálculo consumo médio
+    consumomedio = float(combustivel/100) / float(distancia/1000);
+
+    consumom1 = int(constrain(consumomedio,0,99.9));    
+    consumom2 = int( (constrain(consumomedio,0,99.9) - consumom1) * 10.0); 
+
+    consumomedio2 = float(combustivel2/100) / float(distancia2/1000);
+
+    consumo2m1 = int(constrain(consumomedio2,0,99.9));    
+    consumo2m2 = int( (constrain(consumomedio2,0,99.9) - consumo2m1) * 10.0); 
+
+
+    //calculo percentagem EV
+
+    //percentagemev = distanciaev / (distanciaev + distanciamci);
+
+    //percentagemev = long( distanciaev /1000) / (long ( (distanciaev/1000)) + long((distanciamci/1000)));
+
+   if ((distanciaev + distanciamci)>1)
+    {
+      percentagemev = distanciaev / ((distanciaev/100) + (distanciamci/100));
+    }
+
+    //Ecran 2  
+    //se tiver dados de velocidade imprime os consumos e distancia  
+    if (ecran==2)
+    {
+
+      //imprime consumo médio
+      sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+12);
+      sprintf(buffer,"%2d.%d",consumom1,consumom2);  
+      sLCD.print(buffer);
+
+      //imprime distância
+      sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+5);
+      sprintf(buffer,"%4d.%d",int(distancia/100000),(int(long (distancia%100000)/10000)));  
+      sLCD.print(buffer);
+
+    }
+
+
+    //Ecran 3  
+    //se tiver dados de velocidade imprime os consumos e distancia  
+    if( ecran==3)
+    {
+
+      //imprime consumo médio
+     sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+12);
+      sprintf(buffer,"%2d.%d",consumo2m1,consumo2m2);  
+      sLCD.print(buffer);
+
+      //imprime distância
+      sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+5);
+      sprintf(buffer,"%4d.%d",int(distancia2/100000),(int(long (distancia2%100000)/10000)));  
+      sLCD.print(buffer);
+
+    }
+
+
+
+
+
+
+
+
+    //Ecran 4
+
+    //cálculo da autonomia
+
+
+    //detecta quando o carro andou 1km
+
+    if ((abs(distancia - distancia3)) > 100000)
+    {
+      distancia3 = distancia;
+
+
+      //actualiza média do depósito
+      tabeladeposito[contamedia]=deposito2;
+      contamedia=(contamedia +1) % 10;
+
+      mediadeposito=0;
+      for (count=0;count<10;count++) mediadeposito=mediadeposito + tabeladeposito[count];
+      mediadeposito = mediadeposito / 10;
+
+      //se for nos primeiros 10km usa o valor directo
+      if (distancia3 < 1000000) mediadeposito = deposito2;
+
+      //usa a média da distância parcial maior
+      if (distancia > distancia2)
+      {
+        //autonomia = litros do depósito / media * 100
+        //litros do depósito = deposito2 * 45 /100
+        autonomia = (long(mediadeposito)*45*1000 / long(float(constrain(consumomedio,0.5,99.9)*1000.0))); 
+      }
+      else  
+      {
+        autonomia = (long(mediadeposito)*45*1000 / long(float(constrain(consumomedio2,0.5,99.9)*1000.0))); 
+      }   
+
+    }
+
+
+   
+
+    //imprime autonomia e percentagem de EV
+    if ((ecran == 4) )
+    {
+      sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+0);
+      if (mediadeposito>=100) 
+      {
+        sprintf(buffer,">%4dkm",int(autonomia) ); 
+      }
+      else sprintf(buffer,"%4dkm",int(autonomia) );  
+
+      sLCD.print(buffer);
+
+      sLCD.write(COMMAND);                   // Move o cursor LCD 
+      sLCD.write(LINE1+12);
+      sprintf(buffer,"%3d%%",int(percentagemev) );  
+      sLCD.print(buffer);
+
+      sLCD.write(COMMAND);
+      sLCD.write(LINE1 + 7);                     // Move o cursor do LCD 
+      sprintf(buffer,"%3d%%",(int) mediadeposito);
+      sLCD.print(buffer);
+
+
+
+
+    }
+
+    time1=estMillis();
+  }
 
 
 
@@ -2254,22 +2666,15 @@ void ecu_3(int *dados_f)
 {
 
   timeout = 0;
-  for (count=0;count<=9;count++)
+  for (count=0;count<=19;count++)
   {
     dados_f[count]=9999;
   }
 
-  message_ok0 = false;
-  message_ok1 = false;
-  message_ok2 = false;
-  message_ok3 = false;
-  message_ok4 = false;
-  message_ok5 = false;
-  message_ok6 = false;
-  message_ok7 = false;
-  message_ok8 = false;
-  message_ok9 = false;
-
+  for (count=0;count<=19;count++)
+  {
+    message_ok[count]=false;
+  }
 
   mcp2515_bit_modify(CANCTRL, (1<<REQOP2)|(1<<REQOP1)|(1<<REQOP0), 0);
 
@@ -2291,33 +2696,45 @@ void ecu_3(int *dados_f)
         //na posição 7 velocidade
         //na posição 8 mudança
         //na posição 9 SOC
+        //na posição 10 roda direita frente
+        //na posição 11 roda esquerda frente
+        //na posição 12 roda direita tras
+        //na posição 13 roda esquerda tras
+        //na posição 14 volante
+        //na posição 15 injector
+        //na posição 16 velocidade em raw
+        //na posição 17 depósito
 
-        if((message.id == 0x52C && !message_ok1) )	// Verificar o ID da temperatura
-        {
-          dados_f[1] =  (message.data[1]) / 2 ; //converter em graus C
-          message_ok1 = true ;
-        }
 
-        if((message.id == 0x529 && !message_ok0) )	// Verificar o ID do modo EV
+        // Atencao que os message.data[xxxx] sao usigned ints de 8 bits
+
+
+        if((message.id == 0x529 && !message_ok[0]) )	// Verificar o ID do modo EV
         {
           dados_f[0] = message.data[4] ;
-          message_ok0 = true;
+          message_ok[0] = true;
         }
 
-        if((message.id == 0x57F && !message_ok2) )	// Verificar o ID da luminosidade
+        if((message.id == 0x52C && !message_ok[1]) )	// Verificar o ID da temperatura
+        {
+          dados_f[1] =  (message.data[1]) / 2 ; //converter em graus C
+          message_ok[1] = true ;
+        }
+
+        if((message.id == 0x57F && !message_ok[2]) )	// Verificar o ID da luminosidade
         {
           dados_f[2] = message.data[2] ;
-          message_ok2 = true;
+          message_ok[2] = true;
         }
 
-        if((message.id == 0x3C8 && !message_ok3) )	// Verificar o ID das RPM
+        if((message.id == 0x3C8 && !message_ok[3]) )	// Verificar o ID das RPM
         {
-          valor2 =  ((message.data[2]*256) + message.data[3]) / 8 ;  // converter em RPM
+          valor2 =  (  (   ((long)message.data[2]) << 8) | ((long)message.data[3])) / ((long)8)  ;  // converter em RPM
           dados_f[3] = valor2;  
-          message_ok3 = true;
+          message_ok[3] = true;
         }
 
-        if((message.id == 0x3B && !message_ok4) )	// Verificar o ID da corrente da bateria
+        if((message.id == 0x3B && !message_ok[4]) )	// Verificar o ID da corrente da bateria
         {
           valor = ((message.data[0]) * 256) + (message.data[1]);   //juntar os dois bytes
           if ( (valor & 0x800) != 0 )
@@ -2325,48 +2742,97 @@ void ecu_3(int *dados_f)
             valor = valor - 0x1000; 
           }  //converter 12 bits em 16 bits
           dados_f[4] =  valor / 10 ;                                       //converter em amperes
-          message_ok4 = true; 
+          message_ok[4] = true; 
         }
 
-        if((message.id == 0x244 && !message_ok5) )	// Verificar o ID do acelerador
+        if((message.id == 0x244 && !message_ok[5]) )	// Verificar o ID do acelerador
         {
           dados_f[5] =  message.data[6];  // 0 a 200
-          message_ok5 = true;
+          message_ok[5] = true;
         }
 
-        if((message.id == 0x30 && !message_ok6) )	// Verificar o ID do travão
+        if((message.id == 0x30 && !message_ok[6]) )	// Verificar o ID do travão
         {
-          flut =  ((message.data[4] * 100) / 127);  //converter em %
-          dados_f[6] = flut;
-          message_ok6 = true;
+          valor =  ((message.data[4] * 100) / 127);  //converter em %
+          dados_f[6] = valor;
+          message_ok[6] = true;
         }
 
-        if((message.id == 0xB4 && !message_ok7) )	// Verificar o ID da velocidade
+        if((message.id == 0xB4 && !message_ok[7]) )	// Verificar o ID da velocidade
         {
           valor2 = ( message.data[5] << 8) | (message.data[6]);
-          valor2 = ((valor2 * 10) / 1024);
-          dados_f[7] = valor2;                       
-          message_ok7 = true;
+          dados_f[7] = valor2*10/1024;
+          dados_f[16] = valor2;
+          message_ok[7] = true;
         }
 
-        if((message.id == 0x120 && !message_ok8) )	// Verificar o ID da mudança
+        if((message.id == 0x120 && !message_ok[8]) )	// Verificar o ID da mudança
         {
           dados[8] = (message.data[5]);
-          message_ok8 = true;
+          message_ok[8] = true;
         }
 
-        if((message.id == 0x3CB && !message_ok9) )	// Verificar o ID do SOC
+        if((message.id == 0x3CB && !message_ok[9]) )	// Verificar o ID do SOC
         {
           valor2 = ( message.data[2] << 8) | (message.data[3]);
           valor2 = (valor2 / 2);
           dados_f[9] = valor2;                       
-          message_ok9 = true;
+          message_ok[9] = true;
         }
+
+        if((message.id == 0xB1 && !message_ok[10]) )	// Verificar o ID da rodas frente
+        {
+          valor2 = ( message.data[0] << 8) | (message.data[1]);
+          valor2 = valor2 / 10;
+          dados_f[10] = valor2;                       
+          valor2 = ( message.data[2] << 8) | (message.data[3]);
+          valor2 = valor2 / 10;
+          dados_f[11] = valor2;                       
+          message_ok[10] = true;
+        }
+
+        if((message.id == 0xB3 && !message_ok[12]) )	// Verificar o ID da rodas tras
+        {
+          valor2 = ( message.data[0] << 8) | (message.data[1]);
+          valor2 = valor2 / 10;
+          dados_f[12] = valor2;                       
+          valor2 = ( message.data[2] << 8) | (message.data[3]);
+          valor2 = valor2 / 10;
+          dados_f[13] = valor2;                       
+          message_ok[12] = true;
+        }
+
+        if((message.id == 0x25 && !message_ok[14]) )	// Verificar o ID do volante
+        {
+          valor2 = ( message.data[0] << 8) | (message.data[1]);
+          //valor2 = valor2 / 100;
+          dados_f[14] = valor2;                       
+          message_ok[14] = true;
+        }
+
+
+
+        if((message.id == 0x520 && !message_ok[15]) )	// Verificar o ID do injector
+        {
+          valor2 = ( message.data[1] << 8) | (message.data[2]);
+          dados_f[15] = valor2;                       
+          message_ok[15] = true;
+        }
+
+
+        if((message.id == 0x5A4 && !message_ok[17]) )	// Verificar o ID do deposito
+        {
+          valor2 = ( message.data[1] );
+          dados_f[17] = valor2;                       
+          message_ok[17] = true;
+        }
+
+
 
 
       }
     }
-    if(message_ok1 && message_ok0 && message_ok2 && message_ok3 && message_ok4 && message_ok5 && message_ok6 && message_ok7 && message_ok8 && message_ok9) return;
+    if(message_ok[0] && message_ok[1] && message_ok[2] && message_ok[3] && message_ok[4] && message_ok[5] && message_ok[6] && message_ok[7] && message_ok[8] && message_ok[9] && message_ok[10] && message_ok[12] && message_ok[14] && message_ok[15] && message_ok[17]) return;
 
   }
   return;
@@ -2379,5 +2845,107 @@ char inic(unsigned char speed)
 {
   return mcp2515_init(speed);
 }
+
+
+
+
+// funções para o sleep
+
+
+// Internal function: Start watchdog timer
+// byte psVal - Prescale mask
+void WDT_On (byte psVal)
+{
+  // prepare timed sequence first
+  byte ps = (psVal | (1<<WDIE)) & ~(1<<WDE);
+  cli();
+  wdt_reset();
+  /* Clear WDRF in MCUSR */
+  MCUSR &= ~(1<<WDRF);
+  // start timed sequence
+  WDTCSR |= (1<<WDCE) | (1<<WDE);
+  // set new watchdog timeout value
+  WDTCSR = ps;
+  sei();
+}
+
+
+// Internal function.  Stop watchdog timer
+void WDT_Off() {
+  cli();
+  wdt_reset();
+  /* Clear WDRF in MCUSR */
+  MCUSR &= ~(1<<WDRF);
+  /* Write logical one to WDCE and WDE */
+  /* Keep old prescaler setting to prevent unintentional time-out */
+  WDTCSR |= (1<<WDCE) | (1<<WDE);
+  /* Turn off WDT */
+  WDTCSR = 0x00;
+  sei();
+}
+
+// Calibrate watchdog timer with millis() timer(timer0)
+void calibrate() {
+  // timer0 continues to run in idle sleep mode
+  set_sleep_mode(SLEEP_MODE_IDLE);
+  long tt1=millis();
+  doSleep(256);
+  long tt2=millis();
+  calibv = 256.0/(tt2-tt1);
+}
+
+// Estimated millis is real clock + calibrated sleep time
+long estMillis() {
+  return millis()+timeSleep;
+}
+
+// Delay function
+void sleepCPU_delay(long sleepTime) {
+  ADCSRA &= ~(1<<ADEN);  // adc off
+  PRR = 0xEF; // modules off
+
+  set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+  int trem = doSleep(sleepTime*calibv);
+  timeSleep += (sleepTime-trem);
+
+  PRR = 0x00; //modules on
+  ADCSRA |= (1<<ADEN);  // adc on
+}
+
+// internal function.  
+int doSleep(long timeRem) {
+  byte WDTps = 9;  // WDT Prescaler value, 9 = 8192ms
+
+  isrcalled = 0;
+  sleep_enable();
+  while(timeRem > 0) {
+    //work out next prescale unit to use
+    while ((0x10<<WDTps) > timeRem && WDTps > 0) {
+      WDTps--;
+    }
+    // send prescaler mask to WDT_On
+    WDT_On((WDTps & 0x08 ? (1<<WDP3) : 0x00) | (WDTps & 0x07));
+    isrcalled=0;
+    while (isrcalled==0) {
+      // turn bod off
+      MCUCR |= (1<<BODS) | (1<<BODSE);
+      MCUCR &= ~(1<<BODSE);  // must be done right before sleep
+      sleep_cpu();  // sleep here
+    }
+    // calculate remaining time
+    timeRem -= (0x10<<WDTps);
+  }
+  sleep_disable();
+  return timeRem;
+}
+
+// wdt int service routine
+ISR(WDT_vect) {
+  WDT_Off();
+  isrcalled=1;
+}
+
+
+
 
 
