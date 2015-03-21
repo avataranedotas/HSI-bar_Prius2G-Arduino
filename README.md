@@ -11,6 +11,8 @@ HSI bar allways present on top LCD row
 
 Using the UP button on the CanBus Shield you can change screens (short press) or reset values (long press)
 
+Download this file to read the rest of the explanations.
+
 Description of bottom row on LCD for the 4 screens:
 
 1.
