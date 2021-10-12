@@ -2768,7 +2768,7 @@ void ecu_3(int *dados_f)
 
         if((message.id == 0x120 && !message_ok[8]) )	// Verificar o ID da mudança
         {
-          dados[8] = (message.data[5]);
+          dados_f[8] = (message.data[5]);
           message_ok[8] = true;
         }
 
